@@ -135,6 +135,24 @@ function e($s) { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
     .help { font-size: 11px; color: #6B7C93; margin-top: -8px; margin-bottom: 12px; }
     .footer { text-align: center; font-size: 11px; color: #999; padding: 8px 16px 20px; }
     hr { border: none; border-top: 1px solid #e6eff7; margin: 16px 0; }
+    .autocomplete-wrap { position: relative; }
+    .autocomplete-list {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+      background: #fff; border: 1px solid #005AA0; border-top: none;
+      max-height: 220px; overflow-y: auto; display: none;
+      margin-top: -12px;
+    }
+    .autocomplete-list div {
+      padding: 8px 12px; font-size: 14px; cursor: pointer;
+      border-bottom: 1px solid #eee;
+    }
+    .autocomplete-list div:hover, .autocomplete-list div.active {
+      background: #e6eff7; color: #005AA0;
+    }
+    .autocomplete-list div .site-id {
+      float: right; font-size: 12px; color: #6B7C93; font-weight: normal;
+    }
+    .autocomplete-list div .site-name { font-weight: bold; }
   </style>
 </head>
 <body>
@@ -197,17 +215,16 @@ function e($s) { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
       <div class="card-header">Hållplats <?= $i + 1 ?><?= $i >= 2 ? ' (valfri)' : '' ?></div>
       <div class="card-body">
 
-        <div class="row">
-          <div>
-            <label for="stop_name_<?= $i ?>">Namn</label>
-            <input type="text" id="stop_name_<?= $i ?>" name="stop_name_<?= $i ?>" value="<?= e($s['name']) ?>" placeholder="T.ex. Nacka Trafikplats">
-          </div>
-          <div>
-            <label for="stop_id_<?= $i ?>">Site-ID</label>
-            <input type="text" id="stop_id_<?= $i ?>" name="stop_id_<?= $i ?>" value="<?= e($s['site_id']) ?>" placeholder="T.ex. 4062">
-          </div>
+        <label for="stop_search_<?= $i ?>">Sök hållplats</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="stop_search_<?= $i ?>" autocomplete="off" placeholder="Börja skriva hållplatsnamn..."
+                 value="<?= e($s['name'] ? $s['name'] . ' (ID: ' . $s['site_id'] . ')' : '') ?>"
+                 onfocus="this.select()">
+          <div class="autocomplete-list" id="stop_list_<?= $i ?>"></div>
         </div>
-        <p class="help">Site-ID hittar du via <a href="https://transport.integration.sl.se/v1/sites" target="_blank" style="color:#005AA0;">SL Transport API</a> eller <a href="https://www.trafiklab.se/api/trafiklab-apis/sl/transport/" target="_blank" style="color:#005AA0;">Trafiklab</a>.</p>
+        <input type="hidden" id="stop_name_<?= $i ?>" name="stop_name_<?= $i ?>" value="<?= e($s['name']) ?>">
+        <input type="hidden" id="stop_id_<?= $i ?>" name="stop_id_<?= $i ?>" value="<?= e($s['site_id']) ?>">
+        <p class="help">Välj hållplats från listan. Site-ID fylls i automatiskt. Du kan också ange Site-ID manuellt via <a href="https://transport.integration.sl.se/v1/sites" target="_blank" style="color:#005AA0;">SL Transport API</a>.</p>
 
         <div class="row">
           <div>
@@ -275,6 +292,83 @@ function e($s) { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 <?php endif; ?>
 
 </div>
+
+<?php if ($logged_in): ?>
+<script>
+(function() {
+  var timer = {};
+  for (var idx = 0; idx < 3; idx++) {
+    (function(i) {
+      var search = document.getElementById('stop_search_' + i);
+      var list   = document.getElementById('stop_list_' + i);
+      var hName  = document.getElementById('stop_name_' + i);
+      var hId    = document.getElementById('stop_id_' + i);
+      if (!search) return;
+
+      search.addEventListener('input', function() {
+        var q = search.value.trim();
+        if (q.length < 2) { list.style.display = 'none'; return; }
+        clearTimeout(timer[i]);
+        timer[i] = setTimeout(function() {
+          fetch('search.php?q=' + encodeURIComponent(q) + '&_=' + Date.now(), {cache: 'no-store'})
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (!data.length) {
+                list.innerHTML = '<div style="color:#666;font-style:italic;">Inga träffar</div>';
+                list.style.display = 'block';
+                return;
+              }
+              list.innerHTML = '';
+              data.forEach(function(s) {
+                var d = document.createElement('div');
+                d.innerHTML = '<span class="site-name">' + esc(s.name) + '</span><span class="site-id">ID: ' + esc(s.id) + '</span>';
+                d.addEventListener('click', function() {
+                  hName.value  = s.name;
+                  hId.value    = s.id;
+                  search.value = s.name + ' (ID: ' + s.id + ')';
+                  list.style.display = 'none';
+                });
+                list.appendChild(d);
+              });
+              list.style.display = 'block';
+            })
+            .catch(function() { list.style.display = 'none'; });
+        }, 300);
+      });
+
+      // Rensa val om användaren tömmer fältet
+      search.addEventListener('blur', function() {
+        setTimeout(function() { list.style.display = 'none'; }, 200);
+        if (!search.value.trim()) { hName.value = ''; hId.value = ''; }
+      });
+
+      // Knapp-navigering i listan
+      search.addEventListener('keydown', function(e) {
+        var items = list.querySelectorAll('div');
+        var active = list.querySelector('.active');
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (!active && items.length) { items[0].classList.add('active'); }
+          else if (active && active.nextElementSibling) { active.classList.remove('active'); active.nextElementSibling.classList.add('active'); }
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (active && active.previousElementSibling) { active.classList.remove('active'); active.previousElementSibling.classList.add('active'); }
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (active) { active.click(); }
+        }
+      });
+    })(idx);
+  }
+
+  function esc(s) {
+    var d = document.createElement('span');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+})();
+</script>
+<?php endif; ?>
 
 </body>
 </html>

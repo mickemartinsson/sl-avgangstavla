@@ -2,6 +2,9 @@
 // update.php — Körs via Cron (var 5:e minut)
 // Läser config.json, hämtar SL-avgångar och genererar en statisk display.html
 
+error_reporting(0);
+ini_set('display_errors', '0');
+
 $config_file = __DIR__ . '/config.json';
 if (!file_exists($config_file)) {
     die("FEL: config.json saknas. Öppna settings.php för att konfigurera.\n");
