@@ -1,0 +1,22 @@
+{
+  "password_hash": "$2y$10$defaulthashplaceholder000000000000000000000000000000",
+  "title": "Avg\u00e5ngar mot centrum",
+  "stops": [
+    {
+      "name": "Nacka Trafikplats",
+      "site_id": "4062",
+      "direction": "2",
+      "transport": "BUS",
+      "rows": 8,
+      "show_type": false
+    },
+    {
+      "name": "Nacka Strand",
+      "site_id": "4031",
+      "direction": "2",
+      "transport": "",
+      "rows": 8,
+      "show_type": true
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+# SL Avgångstavla — Apache-konfiguration
+
+# Stäng keep-alive — förhindrar 502 på delat webbhotell
+Header always set Connection "close"
+
+# Redirect / till display.html utan PHP
+RewriteEngine On
+RewriteRule ^$ display.html [L]
+
+# Skydda config.json från direkt åtkomst
+<Files "config.json">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+# Cache-kontroll
+<FilesMatch "display\.html$">
+    Header set Cache-Control "public, max-age=240"
+</FilesMatch>
+<FilesMatch "\.(php|json)$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate"
+</FilesMatch>
