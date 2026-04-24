@@ -161,17 +161,14 @@ $html = <<<HTML
   </div>
 
   <script>
-    var jitter = Math.floor(Math.random() * 60000); // 0–60 s slumpmässig förskjutning på första reload
-    // Retry-delay: 10-30 s jitter — förhindrar att 5 skärmar hamrar 502:ande server i lockstep
-    function retryDelay() { return 10000 + Math.floor(Math.random() * 20000); }
+    var jitter = Math.floor(Math.random() * 60000); // 0–60 s slumpmässig förskjutning
     function reload() {
-      // HEAD istället för GET — drar bara headers, inte hela display.html
-      fetch('display.html', { method: 'HEAD', cache: 'no-cache' })
+      fetch('display.html', { cache: 'no-cache' })
         .then(function (r) {
           if (r.ok) { window.location.replace('display.html'); }
-          else      { setTimeout(reload, retryDelay()); } // 502 → retry med jitter
+          else      { setTimeout(reload, 10000 + Math.floor(Math.random()*20000)); } // 502 → retry 10-30 s (jitter)
         })
-        .catch(function () { setTimeout(reload, retryDelay()); });
+        .catch(function () { setTimeout(reload, 10000 + Math.floor(Math.random()*20000)); });
     }
     setTimeout(reload, {$reload_ms} + jitter);
   </script>
