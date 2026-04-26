@@ -101,7 +101,7 @@ file_put_contents(__DIR__ . '/cache.json', json_encode($cache));
 // --- Bygg HTML ---
 $title    = htmlspecialchars($config['title'] ?? 'Avgångar');
 $subtitle = implode(' & ', array_map(function($s) { return htmlspecialchars($s['name']); }, $stops));
-$reload_ms = 5 * 60 * 1000;
+$reload_ms = 10 * 60 * 1000;
 
 $th = 'style="padding:7px 14px;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.8px;color:#005AA0;text-align:left;"';
 
@@ -184,13 +184,17 @@ $html = <<<HTML
 
   <script>
     var jitter = Math.floor(Math.random() * 60000);
+    // Sprid retry 10–20 s så att 5 skärmar inte slår servern samtidigt vid 502.
+    function retryDelay() { return 10000 + Math.floor(Math.random() * 10000); }
     function reload() {
-      fetch('display.html', { cache: 'no-cache' })
+      // HEAD-request: bara headers (~200 B) för att kolla att servern är OK,
+      // ingen full nedladdning av display.html (~11 kB) innan navigation.
+      fetch('display.html', { method: 'HEAD', cache: 'no-cache' })
         .then(function (r) {
           if (r.ok) { window.location.replace('display.html'); }
-          else      { setTimeout(reload, 10000); }
+          else      { setTimeout(reload, retryDelay()); }
         })
-        .catch(function () { setTimeout(reload, 10000); });
+        .catch(function () { setTimeout(reload, retryDelay()); });
     }
     setTimeout(reload, {$reload_ms} + jitter);
   </script>

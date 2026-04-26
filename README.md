@@ -29,17 +29,19 @@ Cron (var 5:e minut)
 
 Skärmar (t.ex. 5 st Axema C205)
   └── hämtar display.html  (ingen PHP körs per visning)
-      JavaScript laddar om sidan var 5:e minut + slumpmässig förskjutning
+      JavaScript laddar om sidan var 10:e minut + slumpmässig förskjutning
 ```
 
-### Varför statisk HTML och 5-minutersintervall?
+### Varför statisk HTML och låg anropsfrekvens?
 
 Avgångstavlan är medvetet byggd för att klara **flera Axema-skärmar samtidigt** utan problem:
 
 - **Cron-jobbet** körs var 5:e minut och genererar en **statisk HTML-fil** (`display.html`). Ingen PHP-process startas när en skärm hämtar sidan.
 - **Browsercache** (4 min) gör att de flesta omladdningar serveras lokalt utan serveranrop.
+- **Skärmarnas reload-intervall** är 10 minuter — SL-tider är prognosticerade ~90 minuter framåt så det räcker väl, och halverar trafiken jämfört med 5 minuter.
 - **Slumpmässig förskjutning** (0–60 sekunder) sprider ut skärmarnas omladdningar så att de inte alla träffar servern exakt samtidigt.
-- **Retry-logik** — om en skärm får 502 eller nätverksfel försöker den igen efter 10 sekunder.
+- **HEAD-request vid liveness-koll** — JS:en gör först en HEAD-förfrågan (~200 byte) för att verifiera att servern svarar, innan navigation. Slipper ladda hela sidan i onödan om servern är nere.
+- **Retry-logik med jitter** — om en skärm får 502 eller nätverksfel försöker den igen efter 10–20 sekunder (slumpat). Sprider ut retries så 5 skärmar inte slår servern samtidigt.
 
 Utan denna arkitektur kan delat webbhotell (som Loopia) returnera **502-fel** när PHP-processpoolen töms av många samtidiga keep-alive-anslutningar. Den statiska modellen eliminerar detta problem helt.
 
