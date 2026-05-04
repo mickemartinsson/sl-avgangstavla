@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sS -o /dev/null -w \"HTTP %{http_code} | totaltid: %{time_total}s | storlek: %{size_download} bytes | content-type: %{content_type}\\\\n\" https://transport.integration.sl.se/v1/sites/4062/departures?forecast=90)",
+      "Bash(curl -sS -o /dev/null -w \"HTTP %{http_code}\\\\n\" https://transport.integration.sl.se/v1/sites/4031/departures?forecast=90)",
+      "Bash(curl -sS -o /dev/null -w \"Nacka Trafikplats: HTTP %{http_code} | tid: %{time_total}s\\\\n\" \"https://transport.integration.sl.se/v1/sites/4062/departures?forecast=90\")",
+      "Bash(curl -sS -o /dev/null -w \"Nacka Strand:      HTTP %{http_code} | tid: %{time_total}s\\\\n\" \"https://transport.integration.sl.se/v1/sites/4031/departures?forecast=90\")",
+      "Bash(curl -sS -o /dev/null -w \"subdomän slinfo:   HTTP %{http_code} | tid: %{time_total}s | content-type: %{content_type}\\\\n\" \"https://slinfo.dinbrf.se/\")",
+      "Bash(curl -sS -o /dev/null -w \"display.html:      HTTP %{http_code} | tid: %{time_total}s | content-type: %{content_type}\\\\n\" \"https://slinfo.dinbrf.se/display.html\")",
+      "Bash(curl -sS -o /dev/null -w \"rot:           HTTP %{http_code} | tid: %{time_total}s | type: %{content_type} | redirect: %{redirect_url}\\\\n\" \"https://slinfo.brfhimmelsbagen.se/\")",
+      "Bash(curl -sS -o /dev/null -w \"display.html:  HTTP %{http_code} | tid: %{time_total}s | type: %{content_type} | size: %{size_download}\\\\n\" \"https://slinfo.brfhimmelsbagen.se/display.html\")",
+      "Bash(curl -sS -o /dev/null -w \"index.php:     HTTP %{http_code} | tid: %{time_total}s\\\\n\" \"https://slinfo.brfhimmelsbagen.se/index.php\")",
+      "Bash(curl -sSI \"https://slinfo.brfhimmelsbagen.se/display.html\")",
+      "Bash(brew --version)",
+      "Bash(brew list *)",
+      "Bash(brew install *)",
+      "Bash(brew search *)",
+      "Bash(lftp --version)",
+      "Read(//Users/micke/**)",
+      "Bash(lftp -e \"set ssl:verify-certificate no; set ftp:ssl-protect-data true; ls; bye\" ftpcluster.loopia.se)",
+      "Bash(lftp *)",
+      "Bash(curl -sS \"https://slinfo.brfhimmelsbagen.se/update.php\")",
+      "Bash(curl -sSI \"https://slinfo.brfhimmelsbagen.se/\")",
+      "Bash(curl -sS \"https://slinfo.brfhimmelsbagen.se/display.html\")",
+      "Bash(cat)",
+      "Bash(rm /tmp/lftp-check.sh)",
+      "Bash(rm /tmp/lftp-getconfig.sh)",
+      "Read(//tmp/**)",
+      "Bash(curl *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
