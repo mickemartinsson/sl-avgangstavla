@@ -91,9 +91,43 @@ $html = <<<HTML
     body { font-family: Arial, Helvetica, sans-serif; background: #f5f7fa; color: #1a2433; }
     table { width: 100%; border-collapse: collapse; }
   </style>
+  <script>
+    // DOM-swap istället för navigation: skärmen lämnar aldrig sidan och kan
+    // aldrig fastna på browserns 502-felsida. Detta script lever i <head> och
+    // ersätts aldrig — bara innehållet i #content byts.
+    (function () {
+      var RELOAD_MS = 5 * 60 * 1000;
+      function jitter(min, max) { return min + Math.floor(Math.random() * (max - min)); }
+      function schedule(ms) { setTimeout(tick, ms); }
+      function tick() {
+        fetch('display.html?_=' + Date.now())
+          .then(function (r) {
+            if (!r.ok) { schedule(jitter(30000, 90000)); return; }
+            return r.text().then(function (txt) {
+              try {
+                var doc = new DOMParser().parseFromString(txt, 'text/html');
+                var fresh = doc.getElementById('content');
+                var cur = document.getElementById('content');
+                if (fresh && cur) {
+                  cur.innerHTML = fresh.innerHTML;
+                  schedule(RELOAD_MS + jitter(0, 60000));
+                } else {
+                  schedule(jitter(30000, 90000));
+                }
+              } catch (e) {
+                schedule(jitter(30000, 90000));
+              }
+            });
+          })
+          .catch(function () { schedule(jitter(30000, 90000)); });
+      }
+      schedule(RELOAD_MS + jitter(0, 60000));
+    })();
+  </script>
 </head>
 <body>
 
+<div id="content">
   <!-- TOPPMENY -->
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#005AA0;">
     <tr>
@@ -159,19 +193,7 @@ $html = <<<HTML
   <div style="padding:8px 16px 14px;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#999;text-align:center;">
     Data hämtad {$updated} &nbsp;&middot;&nbsp; Sidan laddas om automatiskt var 5:e minut
   </div>
-
-  <script>
-    var jitter = Math.floor(Math.random() * 60000); // 0–60 s slumpmässig förskjutning
-    function reload() {
-      fetch('display.html', { cache: 'no-cache' })
-        .then(function (r) {
-          if (r.ok) { window.location.replace('display.html'); }
-          else      { setTimeout(reload, 10000 + Math.floor(Math.random()*20000)); } // 502 → retry 10-30 s (jitter)
-        })
-        .catch(function () { setTimeout(reload, 10000 + Math.floor(Math.random()*20000)); });
-    }
-    setTimeout(reload, {$reload_ms} + jitter);
-  </script>
+</div>
 
 </body>
 </html>
