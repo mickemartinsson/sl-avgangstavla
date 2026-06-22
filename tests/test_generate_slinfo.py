@@ -164,6 +164,13 @@ def test_main_total_failure_no_cache_writes_minimal(tmp_path, monkeypatch):
     assert "Inga avgångar hittades" in out.read_text(encoding="utf-8")
 
 
+def test_atomic_write_makes_file_world_readable(tmp_path):
+    import stat
+    target = tmp_path / "x.html"
+    g.atomic_write(str(target), "hi")
+    assert stat.S_IMODE(os.stat(target).st_mode) == 0o644
+
+
 def test_atomic_write_cleans_temp_on_replace_failure(tmp_path, monkeypatch):
     target = tmp_path / "out.html"
 
