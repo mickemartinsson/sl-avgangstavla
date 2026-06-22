@@ -7,6 +7,8 @@ Generatorn körs som systemd-timer på edge-a24-1 och skriver en statisk
 ## Komponenter på edgen
 - `/opt/slinfo/generate_slinfo.py` — generatorn (körs av timern).
 - `/var/www/slinfo/display.html` — output (ägd av user `slinfo`, läst av Caddy).
+- `/var/lib/slinfo/cache.json` — senaste goda rader **per hållplats** (för
+  last-good vid partiellt API-fel; ägd av `slinfo`, utanför webroot).
 - `slinfo-generator.service` + `.timer` — var 5:e min.
 - Caddy site-block `slinfo.brfhimmelsbagen.se`.
 
@@ -20,8 +22,10 @@ Generatorn körs som systemd-timer på edge-a24-1 och skriver en statisk
 - Färskhet: `curl -s https://slinfo.brfhimmelsbagen.se/display.html | grep Uppdaterad`
 
 ## Felhantering
-Vid SL-API-fel behålls senaste goda `display.html` (servicen loggar VARNING
-och exitar 1; syns i journal). Skärmen blankas aldrig av en transient blipp.
+Hållplatserna hämtas oberoende. Faller en (timeout/non-200/JSON-fel) visas
+dess senaste goda rader ur `cache.json` medan den friska siten fortsätter
+live; servicen loggar VARNING och exitar 1 (syns i journal). Faller båda utan
+cache skrivs en minimal giltig sida. Tavlan blankas eller 502:ar aldrig.
 
 ## Rollback till Loopia
 Repointa A-posten `slinfo.brfhimmelsbagen.se` → Loopia-IP (Loopia-filerna i

@@ -86,40 +86,95 @@ def test_render_matches_golden():
     assert g.build_page(nt, ns, "12:34") == expected
 
 
-def test_main_writes_page_on_success(tmp_path, monkeypatch):
+def _fixed_fetch(mapping):
+    """fetch_sl-stub som svarar per URL — ett Exception-värde kastas."""
+    def _fetch(url, timeout=10):
+        val = mapping[url]
+        if isinstance(val, Exception):
+            raise val
+        return val
+    return _fetch
+
+
+def _patch_paths(tmp_path, monkeypatch):
     out = tmp_path / "display.html"
+    cache = tmp_path / "cache.json"
     monkeypatch.setattr(g, "OUT_FILE", str(out))
-    monkeypatch.setattr(g, "fetch_sl",
-                        lambda url, timeout=10: {"departures": []})
+    monkeypatch.setattr(g, "CACHE_FILE", str(cache))
+    return out, cache
+
+
+def test_main_success_renders_and_caches(tmp_path, monkeypatch):
+    out, cache = _patch_paths(tmp_path, monkeypatch)
+    nt = {"departures": [{"expected": "2026-06-22T14:05:00", "destination": "Slussen",
+                          "line": {"designation": "401", "transport_mode": "BUS"}}]}
+    ns = {"departures": [{"expected": "2026-06-22T14:10:00", "destination": "Nybroplan",
+                          "line": {"designation": "80", "transport_mode": "SHIP"}}]}
+    monkeypatch.setattr(g, "fetch_sl", _fixed_fetch({g.NT_URL: nt, g.NS_URL: ns}))
     rc = g.main()
     assert rc == 0
-    assert out.exists()
-    assert out.read_text(encoding="utf-8").startswith("<!DOCTYPE html>")
+    page = out.read_text(encoding="utf-8")
+    assert "Slussen" in page and "Nybroplan" in page
+    saved = json.loads(cache.read_text(encoding="utf-8"))
+    assert saved["nt"][0]["dest"] == "Slussen"
+    assert saved["ns"][0]["dest"] == "Nybroplan"
 
 
-def test_main_keeps_last_good_on_api_failure(tmp_path, monkeypatch):
-    out = tmp_path / "display.html"
-    out.write_text("OLD-GOOD", encoding="utf-8")
-    monkeypatch.setattr(g, "OUT_FILE", str(out))
-
-    def boom(url, timeout=10):
-        raise RuntimeError("502 simulated")
-
-    monkeypatch.setattr(g, "fetch_sl", boom)
+def test_main_partial_failure_uses_cached_for_failed_site(tmp_path, monkeypatch):
+    out, cache = _patch_paths(tmp_path, monkeypatch)
+    cache.write_text(json.dumps({
+        "nt": [{"time": "07:00", "dest": "GammalNT", "line": "1", "type": ""}],
+        "ns": [{"time": "07:05", "dest": "CachadNS", "line": "80", "type": "Bat"}],
+    }), encoding="utf-8")
+    nt = {"departures": [{"expected": "2026-06-22T14:05:00", "destination": "LiveNT",
+                          "line": {"designation": "401", "transport_mode": "BUS"}}]}
+    monkeypatch.setattr(g, "fetch_sl", _fixed_fetch(
+        {g.NT_URL: nt, g.NS_URL: RuntimeError("502 NS nere")}))
     rc = g.main()
     assert rc == 1
-    assert out.read_text(encoding="utf-8") == "OLD-GOOD"
+    page = out.read_text(encoding="utf-8")
+    assert "LiveNT" in page        # friska siten live
+    assert "CachadNS" in page      # fallna siten visar last-good
+    saved = json.loads(cache.read_text(encoding="utf-8"))
+    assert saved["nt"][0]["dest"] == "LiveNT"     # NT uppdaterad i cache
+    assert saved["ns"][0]["dest"] == "CachadNS"   # NS bevarad
 
 
-def test_main_writes_minimal_page_when_no_previous(tmp_path, monkeypatch):
-    out = tmp_path / "display.html"
-    monkeypatch.setattr(g, "OUT_FILE", str(out))
+def test_main_total_failure_with_cache_renders_last_good(tmp_path, monkeypatch):
+    out, cache = _patch_paths(tmp_path, monkeypatch)
+    cache.write_text(json.dumps({
+        "nt": [{"time": "07:00", "dest": "CachadNT", "line": "1", "type": ""}],
+        "ns": [{"time": "07:05", "dest": "CachadNS", "line": "80", "type": "Bat"}],
+    }), encoding="utf-8")
+    monkeypatch.setattr(g, "fetch_sl", _fixed_fetch(
+        {g.NT_URL: RuntimeError("nere"), g.NS_URL: RuntimeError("nere")}))
+    rc = g.main()
+    assert rc == 1
+    page = out.read_text(encoding="utf-8")
+    assert "CachadNT" in page and "CachadNS" in page
 
-    def boom(url, timeout=10):
-        raise RuntimeError("502 simulated")
 
-    monkeypatch.setattr(g, "fetch_sl", boom)
+def test_main_total_failure_no_cache_writes_minimal(tmp_path, monkeypatch):
+    out, cache = _patch_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "fetch_sl", _fixed_fetch(
+        {g.NT_URL: RuntimeError("nere"), g.NS_URL: RuntimeError("nere")}))
     rc = g.main()
     assert rc == 1
     assert out.exists()
     assert "Inga avgångar hittades" in out.read_text(encoding="utf-8")
+
+
+def test_atomic_write_cleans_temp_on_replace_failure(tmp_path, monkeypatch):
+    target = tmp_path / "out.html"
+
+    def boom(src, dst):
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(g.os, "replace", boom)
+    try:
+        g.atomic_write(str(target), "data")
+    except OSError:
+        pass
+    leftovers = [p for p in os.listdir(tmp_path) if p.startswith(".display.")]
+    assert leftovers == []
+    assert not target.exists()

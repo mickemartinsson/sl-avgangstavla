@@ -760,8 +760,9 @@ Expected: `OK`, en Python 3-version, `SL-API: 200`.
 - [ ] **Step 2: Skapa användare + kataloger på edgen**
 
 ```bash
-ssh mikael@100.76.88.121 'sudo useradd --system --no-create-home --shell /usr/sbin/nologin slinfo 2>/dev/null; sudo mkdir -p /opt/slinfo /var/www/slinfo /var/log/caddy; sudo chown slinfo:slinfo /opt/slinfo /var/www/slinfo; id slinfo'
+ssh mikael@100.76.88.121 'sudo useradd --system --no-create-home --shell /usr/sbin/nologin slinfo 2>/dev/null; sudo mkdir -p /opt/slinfo /var/www/slinfo /var/lib/slinfo /var/log/caddy; sudo chown slinfo:slinfo /opt/slinfo /var/www/slinfo /var/lib/slinfo; id slinfo'
 ```
+(`/var/lib/slinfo` håller `cache.json` med per-site last-good rader, utanför webroot.)
 Expected: `id slinfo` skriver ut uid/gid (idempotent — `useradd` kan säga "already exists", OK).
 
 - [ ] **Step 3: Kopiera generator + units**

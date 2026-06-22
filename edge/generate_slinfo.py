@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Generera SL-avgångstavlans display.html på edge-a24-1.
 
-Port av web/update.php. Hämtar SL:s öppna API för två hållplatser,
-renderar en statisk HTML-sida (mall identisk med Loopia-versionen) och
-skriver den atomiskt. Vid API-fel behålls senaste goda filen.
+Port av web/update.php. Hämtar SL:s öppna API för två hållplatser
+(oberoende av varandra), renderar en statisk HTML-sida (mall identisk med
+Loopia-versionen) och skriver den atomiskt. Faller en hållplats visas dess
+senaste goda rader ur en cache (CACHE_FILE) — den friska siten fortsätter
+uppdateras live. Tavlan blankas eller 502:ar därför aldrig.
 """
 import html
 import datetime
@@ -181,18 +183,26 @@ __NS_ROWS__        </tbody>
 '''
 
 
-def build_page(nt_data, ns_data, updated):
-    nt = rows_html(parse_rows(nt_data, 8))
-    ns = rows_html(parse_rows(ns_data, 8, with_type=True))
+def render_page(nt_rows, ns_rows, updated):
+    """Rendera sidan från färdiga rad-dictar (live eller cachade)."""
     return (TEMPLATE
             .replace("__TH__", _TH)
-            .replace("__NT_ROWS__", nt)
-            .replace("__NS_ROWS__", ns)
+            .replace("__NT_ROWS__", rows_html(nt_rows))
+            .replace("__NS_ROWS__", rows_html(ns_rows, with_type=True))
             .replace("__UPDATED__", html.escape(updated)))
+
+
+def build_page(nt_data, ns_data, updated):
+    """Tunn wrapper: parsa rå API-data och rendera (används av golden-testet)."""
+    return render_page(parse_rows(nt_data, 8),
+                       parse_rows(ns_data, 8, with_type=True),
+                       updated)
 
 
 OUT_DIR = "/var/www/slinfo"
 OUT_FILE = os.path.join(OUT_DIR, "display.html")
+STATE_DIR = "/var/lib/slinfo"
+CACHE_FILE = os.path.join(STATE_DIR, "cache.json")
 NT_URL = ("https://transport.integration.sl.se/v1/sites/4062/departures"
           "?transport=BUS&direction=2&forecast=90")
 NS_URL = ("https://transport.integration.sl.se/v1/sites/4031/departures"
@@ -226,23 +236,55 @@ def atomic_write(path, content):
         raise
 
 
+def load_cache():
+    try:
+        with open(CACHE_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_cache(cache):
+    try:
+        atomic_write(CACHE_FILE, json.dumps(cache, ensure_ascii=False))
+    except OSError as e:
+        print(f"VARNING: kunde inte spara cache ({e})", file=sys.stderr)
+
+
+def _fetch_rows(url, with_type):
+    return parse_rows(fetch_sl(url), 8, with_type=with_type)
+
+
 def main():
     updated = datetime.datetime.now(TZ).strftime("%H:%M")
+    cache = load_cache()
+    new_cache = dict(cache)
+    failures = []
+
+    # Varje hållplats hämtas oberoende. Faller en, visas dess senaste goda
+    # rader ur cachen — den friska siten fortsätter uppdateras live.
     try:
-        nt = fetch_sl(NT_URL)
-        ns = fetch_sl(NS_URL)
+        nt_rows = _fetch_rows(NT_URL, with_type=False)
+        new_cache["nt"] = nt_rows
     except Exception as e:
-        if os.path.exists(OUT_FILE):
-            print(f"VARNING: SL-API-fel ({e}); behåller senaste display.html",
-                  file=sys.stderr)
-            return 1
-        print(f"VARNING: SL-API-fel ({e}) och ingen tidigare fil; "
-              f"skriver minimal sida", file=sys.stderr)
-        atomic_write(OUT_FILE, build_page(None, None, updated))
+        failures.append(f"NT ({e})")
+        nt_rows = cache.get("nt", [])
+
+    try:
+        ns_rows = _fetch_rows(NS_URL, with_type=True)
+        new_cache["ns"] = ns_rows
+    except Exception as e:
+        failures.append(f"NS ({e})")
+        ns_rows = cache.get("ns", [])
+
+    atomic_write(OUT_FILE, render_page(nt_rows, ns_rows, updated))
+    save_cache(new_cache)
+
+    if failures:
+        print(f"VARNING: SL-API-fel [{'; '.join(failures)}] — "
+              f"renderade med last-good där tillgängligt", file=sys.stderr)
         return 1
-    atomic_write(OUT_FILE, build_page(nt, ns, updated))
-    print(f"OK | {updated} | NT: {len(parse_rows(nt, 8))} avg | "
-          f"NS: {len(parse_rows(ns, 8, True))} avg")
+    print(f"OK | {updated} | NT: {len(nt_rows)} avg | NS: {len(ns_rows)} avg")
     return 0
 
 

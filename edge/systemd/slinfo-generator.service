@@ -11,6 +11,6 @@ ExecStart=/usr/bin/python3 /opt/slinfo/generate_slinfo.py
 # Härdning
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/var/www/slinfo
+ReadWritePaths=/var/www/slinfo /var/lib/slinfo
 ProtectHome=true
 PrivateTmp=true

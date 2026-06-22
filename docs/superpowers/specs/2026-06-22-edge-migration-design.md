@@ -108,13 +108,16 @@ Loopia-panelen. Zonen `brfhimmelsbagen.se` är en annan zon än `pistolsm2026.nu
 
 ## Felhantering (här löses 502 vid roten)
 
-- **SL-API blippar** (timeout / non-200 / JSON-fel på endera site) →
-  **skriv INTE över** `display.html`. Behåll senaste goda filen, logga warning,
-  exit 1 (syns i `journalctl`). En transient blipp tömmer aldrig tavlorna.
-  (Detta fixar en latent bug i nuvarande `update.php`, som skriver "Inga
-  avgångar hittades" och blankar skärmen vid API-fel.)
-- **Första körningen / ingen tidigare fil** → skriv en minimal giltig sida så
-  skärmen alltid har något att visa.
+- **Per-site last-good (beslut 2026-06-22):** de två hållplatserna hämtas
+  **oberoende av varandra**. Varje lyckad hämtning cachas (rader per site) i
+  `/var/lib/slinfo/cache.json`. Faller en site (timeout / non-200 / JSON-fel)
+  renderas den **friska siten live** medan den fallna visar sina **senaste goda
+  rader ur cachen**; servicen loggar warning + exit 1. En ihållande outage av
+  *en* site gör alltså inte den andra inaktuell. (Detta fixar samtidigt den
+  latenta bug i nuvarande `update.php` som blankar skärmen vid API-fel.)
+- **Båda faller, cache finns** → båda visar last-good (giltig sida), exit 1.
+- **Båda faller, ingen cache (t.ex. allra första körningen)** → minimal giltig
+  sida så skärmen alltid har något att visa, exit 1.
 - **Caddy/host** → statisk fil + systemd-managed Caddy; en frisk `file_server`
   502:ar inte.
 - **Klient** → DOM-swap-self-healing (jitter 30–90s retry) behålls oförändrat i
