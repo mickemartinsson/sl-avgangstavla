@@ -1,0 +1,9 @@
+slinfo.brfhimmelsbagen.se {
+	root * /var/www/slinfo
+	file_server
+	encode gzip
+	header Cache-Control "no-cache"
+	log {
+		output file /var/log/caddy/slinfo.log
+	}
+}
