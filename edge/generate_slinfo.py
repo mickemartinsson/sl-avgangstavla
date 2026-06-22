@@ -6,6 +6,13 @@ renderar en statisk HTML-sida (mall identisk med Loopia-versionen) och
 skriver den atomiskt. Vid API-fel behålls senaste goda filen.
 """
 import html
+import datetime
+import json
+import os
+import sys
+import tempfile
+import urllib.request
+from zoneinfo import ZoneInfo
 
 
 def parse_rows(data, count, with_type=False):
@@ -182,3 +189,62 @@ def build_page(nt_data, ns_data, updated):
             .replace("__NT_ROWS__", nt)
             .replace("__NS_ROWS__", ns)
             .replace("__UPDATED__", html.escape(updated)))
+
+
+OUT_DIR = "/var/www/slinfo"
+OUT_FILE = os.path.join(OUT_DIR, "display.html")
+NT_URL = ("https://transport.integration.sl.se/v1/sites/4062/departures"
+          "?transport=BUS&direction=2&forecast=90")
+NS_URL = ("https://transport.integration.sl.se/v1/sites/4031/departures"
+          "?direction=2&forecast=90")
+TZ = ZoneInfo("Europe/Stockholm")
+
+
+def fetch_sl(url, timeout=10):
+    req = urllib.request.Request(url, headers={
+        "Accept": "application/json",
+        "User-Agent": "SL-Avgangar/1.0",
+    })
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"HTTP {resp.status} för {url}")
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def atomic_write(path, content):
+    d = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".display.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def main():
+    updated = datetime.datetime.now(TZ).strftime("%H:%M")
+    try:
+        nt = fetch_sl(NT_URL)
+        ns = fetch_sl(NS_URL)
+    except Exception as e:
+        if os.path.exists(OUT_FILE):
+            print(f"VARNING: SL-API-fel ({e}); behåller senaste display.html",
+                  file=sys.stderr)
+            return 1
+        print(f"VARNING: SL-API-fel ({e}) och ingen tidigare fil; "
+              f"skriver minimal sida", file=sys.stderr)
+        atomic_write(OUT_FILE, build_page(None, None, updated))
+        return 1
+    atomic_write(OUT_FILE, build_page(nt, ns, updated))
+    print(f"OK | {updated} | NT: {len(parse_rows(nt, 8))} avg | "
+          f"NS: {len(parse_rows(ns, 8, True))} avg")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -84,3 +84,42 @@ def test_render_matches_golden():
     ns = json.load(open(os.path.join(FIX, "sl_4031_ns.json")))
     expected = open(os.path.join(FIX, "golden_display.html"), encoding="utf-8").read()
     assert g.build_page(nt, ns, "12:34") == expected
+
+
+def test_main_writes_page_on_success(tmp_path, monkeypatch):
+    out = tmp_path / "display.html"
+    monkeypatch.setattr(g, "OUT_FILE", str(out))
+    monkeypatch.setattr(g, "fetch_sl",
+                        lambda url, timeout=10: {"departures": []})
+    rc = g.main()
+    assert rc == 0
+    assert out.exists()
+    assert out.read_text(encoding="utf-8").startswith("<!DOCTYPE html>")
+
+
+def test_main_keeps_last_good_on_api_failure(tmp_path, monkeypatch):
+    out = tmp_path / "display.html"
+    out.write_text("OLD-GOOD", encoding="utf-8")
+    monkeypatch.setattr(g, "OUT_FILE", str(out))
+
+    def boom(url, timeout=10):
+        raise RuntimeError("502 simulated")
+
+    monkeypatch.setattr(g, "fetch_sl", boom)
+    rc = g.main()
+    assert rc == 1
+    assert out.read_text(encoding="utf-8") == "OLD-GOOD"
+
+
+def test_main_writes_minimal_page_when_no_previous(tmp_path, monkeypatch):
+    out = tmp_path / "display.html"
+    monkeypatch.setattr(g, "OUT_FILE", str(out))
+
+    def boom(url, timeout=10):
+        raise RuntimeError("502 simulated")
+
+    monkeypatch.setattr(g, "fetch_sl", boom)
+    rc = g.main()
+    assert rc == 1
+    assert out.exists()
+    assert "Inga avgångar hittades" in out.read_text(encoding="utf-8")
