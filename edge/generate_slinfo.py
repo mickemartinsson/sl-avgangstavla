@@ -30,7 +30,7 @@ def parse_rows(data, count, with_type=False):
             "time": html.escape(ts[11:16]),
             "dest": html.escape(d.get("destination") or ""),
             "line": html.escape((d.get("line") or {}).get("designation") or ""),
-            "type": (("Bat" if mode == "SHIP" else "Buss") if with_type else ""),
+            "type": (("Båt" if mode == "SHIP" else "Buss") if with_type else ""),
         })
     return rows
 

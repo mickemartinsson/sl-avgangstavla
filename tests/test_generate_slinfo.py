@@ -23,7 +23,7 @@ def test_parse_rows_uses_scheduled_when_no_expected():
     ]}
     rows = g.parse_rows(data, 8, with_type=True)
     assert rows[0]["time"] == "09:00"
-    assert rows[0]["type"] == "Bat"
+    assert rows[0]["type"] == "Båt"
 
 
 def test_parse_rows_bus_type():
@@ -124,7 +124,7 @@ def test_main_partial_failure_uses_cached_for_failed_site(tmp_path, monkeypatch)
     out, cache = _patch_paths(tmp_path, monkeypatch)
     cache.write_text(json.dumps({
         "nt": [{"time": "07:00", "dest": "GammalNT", "line": "1", "type": ""}],
-        "ns": [{"time": "07:05", "dest": "CachadNS", "line": "80", "type": "Bat"}],
+        "ns": [{"time": "07:05", "dest": "CachadNS", "line": "80", "type": "Båt"}],
     }), encoding="utf-8")
     nt = {"departures": [{"expected": "2026-06-22T14:05:00", "destination": "LiveNT",
                           "line": {"designation": "401", "transport_mode": "BUS"}}]}
@@ -144,7 +144,7 @@ def test_main_total_failure_with_cache_renders_last_good(tmp_path, monkeypatch):
     out, cache = _patch_paths(tmp_path, monkeypatch)
     cache.write_text(json.dumps({
         "nt": [{"time": "07:00", "dest": "CachadNT", "line": "1", "type": ""}],
-        "ns": [{"time": "07:05", "dest": "CachadNS", "line": "80", "type": "Bat"}],
+        "ns": [{"time": "07:05", "dest": "CachadNS", "line": "80", "type": "Båt"}],
     }), encoding="utf-8")
     monkeypatch.setattr(g, "fetch_sl", _fixed_fetch(
         {g.NT_URL: RuntimeError("nere"), g.NS_URL: RuntimeError("nere")}))
