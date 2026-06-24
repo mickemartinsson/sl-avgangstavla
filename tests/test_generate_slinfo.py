@@ -110,7 +110,8 @@ def test_main_success_renders_and_caches(tmp_path, monkeypatch):
                           "line": {"designation": "401", "transport_mode": "BUS"}}]}
     ns = {"departures": [{"expected": "2026-06-22T14:10:00", "destination": "Nybroplan",
                           "line": {"designation": "80", "transport_mode": "SHIP"}}]}
-    monkeypatch.setattr(g, "fetch_sl", _fixed_fetch({g.NT_URL: nt, g.NS_URL: ns}))
+    monkeypatch.setattr(g, "fetch_sl", _fixed_fetch(
+        {g.NT_URL: nt, g.NS_URL: ns, g.DEVIATIONS_URL: []}))
     rc = g.main()
     assert rc == 0
     page = out.read_text(encoding="utf-8")
@@ -169,6 +170,154 @@ def test_atomic_write_makes_file_world_readable(tmp_path):
     target = tmp_path / "x.html"
     g.atomic_write(str(target), "hi")
     assert stat.S_IMODE(os.stat(target).st_mode) == 0o644
+
+
+import datetime
+from zoneinfo import ZoneInfo
+
+TZ = ZoneInfo("Europe/Stockholm")
+NOW = datetime.datetime(2026, 6, 24, 12, 0, tzinfo=TZ)
+
+
+def _msg(case_id, importance, header, *, alias="Linje X",
+         influence=5, pub_from="2020-01-01T00:00:00+02:00"):
+    return {
+        "deviation_case_id": case_id,
+        "priority": {"importance_level": importance, "influence_level": influence},
+        "publish": {"from": pub_from},
+        "message_variants": [{"header": header, "scope_alias": alias}],
+    }
+
+
+def test_filter_alerts_drops_below_importance_threshold():
+    msgs = [_msg(1, 5, "Försening")]   # imp=5 < 6
+    assert g.filter_alerts(msgs, now=NOW) == []
+
+
+def test_filter_alerts_accepts_importance_6_and_up():
+    msgs = [_msg(1, 6, "Försening")]
+    out = g.filter_alerts(msgs, now=NOW)
+    assert len(out) == 1
+    assert out[0]["level"] == "INFO"     # 6 → INFO
+
+
+def test_filter_alerts_marks_importance_7_as_stopp():
+    msgs = [_msg(1, 7, "Inställd trafik")]
+    out = g.filter_alerts(msgs, now=NOW)
+    assert out[0]["level"] == "STOPP"
+
+
+def test_filter_alerts_blocklist_skips_hiss_and_skylt():
+    msgs = [
+        _msg(1, 7, "Avstängd hiss vid Slussen"),
+        _msg(2, 6, "Skylt ur funktion vid Igelboda"),
+        _msg(3, 6, "Inställd trafik mellan A och B"),
+    ]
+    out = g.filter_alerts(msgs, now=NOW)
+    assert len(out) == 1
+    assert "Inställd" in out[0]["header"]
+
+
+def test_filter_alerts_skips_future_publish():
+    future = "2099-01-01T00:00:00+02:00"
+    msgs = [
+        _msg(1, 7, "Kommande arbete", pub_from=future),
+        _msg(2, 6, "Aktiv störning"),
+    ]
+    out = g.filter_alerts(msgs, now=NOW)
+    assert len(out) == 1
+    assert out[0]["header"] == "Aktiv störning"
+
+
+def test_filter_alerts_dedupes_on_case_id():
+    msgs = [_msg(1, 7, "Försening"), _msg(1, 7, "Försening")]
+    assert len(g.filter_alerts(msgs, now=NOW)) == 1
+
+
+def test_filter_alerts_caps_at_max_rows():
+    msgs = [_msg(i, 7, f"Störning {i}") for i in range(10)]
+    assert len(g.filter_alerts(msgs, now=NOW)) == g.ALERT_MAX_ROWS
+
+
+def test_filter_alerts_sorts_high_importance_first():
+    msgs = [
+        _msg(1, 6, "Lägre", influence=3),
+        _msg(2, 7, "Högre", influence=7),
+    ]
+    out = g.filter_alerts(msgs, now=NOW)
+    assert out[0]["header"] == "Högre"
+
+
+def test_filter_alerts_handles_unparseable_publish_date():
+    msgs = [_msg(1, 7, "Aktiv", pub_from="kaputt")]
+    # Ej parsebart → visa hellre än gömma
+    assert len(g.filter_alerts(msgs, now=NOW)) == 1
+
+
+def test_alerts_html_empty_returns_empty_string():
+    assert g.alerts_html([]) == ""
+
+
+def test_alerts_html_renders_level_marker_and_text():
+    alerts = [{"level": "STOPP", "alias": "Gröna linjen", "header": "Stopp"}]
+    out = g.alerts_html(alerts)
+    assert "[STOPP]" in out
+    assert "Gröna linjen" in out
+    assert "Stopp" in out
+
+
+def test_alerts_html_escapes_html_in_alias_and_header():
+    alerts = [{"level": "INFO", "alias": "A & B", "header": "<script>"}]
+    out = g.alerts_html(alerts)
+    assert "A &amp; B" in out
+    assert "&lt;script&gt;" in out
+    assert "<script>" not in out
+
+
+def test_main_writes_alerts_when_deviations_present(tmp_path, monkeypatch):
+    out, cache = _patch_paths(tmp_path, monkeypatch)
+    nt = {"departures": []}
+    ns = {"departures": []}
+    devs = [_msg(99, 7, "Inställd trafik", alias="Gröna linjen")]
+    monkeypatch.setattr(g, "fetch_sl", _fixed_fetch(
+        {g.NT_URL: nt, g.NS_URL: ns, g.DEVIATIONS_URL: devs}))
+    rc = g.main()
+    assert rc == 0
+    page = out.read_text(encoding="utf-8")
+    assert "[STOPP]" in page
+    assert "Gröna linjen" in page
+    saved = json.loads(cache.read_text(encoding="utf-8"))
+    assert saved["alerts"][0]["alias"] == "Gröna linjen"
+
+
+def test_main_deviations_failure_uses_cached_alerts(tmp_path, monkeypatch):
+    out, cache = _patch_paths(tmp_path, monkeypatch)
+    cache.write_text(json.dumps({
+        "nt": [], "ns": [],
+        "alerts": [{"level": "STOPP", "alias": "Cached", "header": "Cachad störning"}],
+    }), encoding="utf-8")
+    monkeypatch.setattr(g, "fetch_sl", _fixed_fetch({
+        g.NT_URL: {"departures": []},
+        g.NS_URL: {"departures": []},
+        g.DEVIATIONS_URL: RuntimeError("dev-api nere"),
+    }))
+    rc = g.main()
+    assert rc == 1                # rc=1 pga deviations-fel
+    page = out.read_text(encoding="utf-8")
+    assert "Cachad störning" in page   # last-good visad
+
+
+def test_main_no_deviations_renders_no_alert_section(tmp_path, monkeypatch):
+    out, _ = _patch_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "fetch_sl", _fixed_fetch({
+        g.NT_URL: {"departures": []},
+        g.NS_URL: {"departures": []},
+        g.DEVIATIONS_URL: [],
+    }))
+    assert g.main() == 0
+    page = out.read_text(encoding="utf-8")
+    assert "[STOPP]" not in page
+    assert "[INFO]" not in page
 
 
 def test_atomic_write_cleans_temp_on_replace_failure(tmp_path, monkeypatch):

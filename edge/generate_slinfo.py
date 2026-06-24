@@ -41,6 +41,32 @@ _TH = ('style="padding:7px 14px;font-size:12px;font-weight:bold;'
        'text-align:left;"')
 
 
+_ALERT_BG = {"STOPP": "#c41e3a", "INFO": "#d4a017"}  # röd / mörk gul (kontrast mot vit text)
+
+
+def alerts_html(alerts):
+    """Rendera störningsrutorna. Tom sträng = hela sektionen göms."""
+    if not alerts:
+        return ""
+    rows = []
+    for a in alerts:
+        bg = _ALERT_BG.get(a["level"], "#666")
+        alias = html.escape(a["alias"])
+        header = html.escape(a["header"])
+        text = f"{alias} — {header}" if alias else header
+        rows.append(
+            f'<div style="background-color:{bg};color:#ffffff;'
+            f'font-family:Arial,Helvetica,sans-serif;padding:8px 14px;'
+            f'margin-bottom:6px;font-size:14px;font-weight:bold;'
+            f'border-left:6px solid #000000;">'
+            f'<span style="display:inline-block;min-width:62px;'
+            f'font-size:11px;letter-spacing:1px;">[{a["level"]}]</span>'
+            f'{text}</div>'
+        )
+    return ('<div style="padding:12px 16px 0;">'
+            + "".join(rows) + '</div>')
+
+
 def rows_html(rows, with_type=False):
     if not rows:
         cols = 4 if with_type else 3
@@ -131,6 +157,8 @@ TEMPLATE = '''<!DOCTYPE html>
     </tr>
   </table>
 
+  <!-- STÖRNINGAR (göms om tom) -->
+__ALERTS__
   <!-- INNEHÅLL -->
   <div style="padding:16px;">
 
@@ -183,20 +211,22 @@ __NS_ROWS__        </tbody>
 '''
 
 
-def render_page(nt_rows, ns_rows, updated):
+def render_page(nt_rows, ns_rows, updated, alerts=None):
     """Rendera sidan från färdiga rad-dictar (live eller cachade)."""
     return (TEMPLATE
             .replace("__TH__", _TH)
+            .replace("__ALERTS__", alerts_html(alerts or []))
             .replace("__NT_ROWS__", rows_html(nt_rows))
             .replace("__NS_ROWS__", rows_html(ns_rows, with_type=True))
             .replace("__UPDATED__", html.escape(updated)))
 
 
-def build_page(nt_data, ns_data, updated):
+def build_page(nt_data, ns_data, updated, alert_messages=None):
     """Tunn wrapper: parsa rå API-data och rendera (används av golden-testet)."""
     return render_page(parse_rows(nt_data, 8),
                        parse_rows(ns_data, 8, with_type=True),
-                       updated)
+                       updated,
+                       filter_alerts(alert_messages or []))
 
 
 OUT_DIR = "/var/www/slinfo"
@@ -207,7 +237,21 @@ NT_URL = ("https://transport.integration.sl.se/v1/sites/4062/departures"
           "?transport=BUS&direction=2&forecast=90")
 NS_URL = ("https://transport.integration.sl.se/v1/sites/4031/departures"
           "?direction=2&forecast=90")
+DEVIATIONS_URL = ("https://deviations.integration.sl.se/v1/messages"
+                  "?future=true&transport_mode=METRO&transport_mode=TRAIN"
+                  "&transport_mode=TRAM&transport_mode=SHIP")
 TZ = ZoneInfo("Europe/Stockholm")
+
+# Filter: importance_level >= 6 = "stora påverkande störningar".
+# Evergreens (hiss, skylt-fel, planerade underhåll) sorteras bort via
+# header-blocklist. Endast aktiva meddelanden (publish.from <= nu) visas.
+ALERT_IMPORTANCE_MIN = 6
+ALERT_MAX_ROWS = 3
+ALERT_HEADER_BLOCKLIST = (
+    "hiss", "skylt ur funktion", "underhållsarbete", "museispår",
+    "förstärker", "extrainsatt", "tryck på", "rulltrappor",
+    "framkomlighetsproblem", "trafikerar",
+)
 
 
 def fetch_sl(url, timeout=10):
@@ -219,6 +263,54 @@ def fetch_sl(url, timeout=10):
         if resp.status != 200:
             raise RuntimeError(f"HTTP {resp.status} för {url}")
         return json.loads(resp.read().decode("utf-8"))
+
+
+def filter_alerts(messages, now=None):
+    """Plocka ut akuta system-störningar ur deviations-API-svaret.
+
+    Returnerar en lista alert-dicts {level: "STOPP"|"INFO", alias, header}
+    sorterad på (importance + influence) desc, max ALERT_MAX_ROWS.
+    """
+    if now is None:
+        now = datetime.datetime.now(TZ)
+    seen = set()
+    hits = []
+    for m in messages or []:
+        cid = m.get("deviation_case_id")
+        if cid in seen:
+            continue
+        seen.add(cid)
+
+        pr = m.get("priority") or {}
+        imp = pr.get("importance_level", 0)
+        if imp < ALERT_IMPORTANCE_MIN:
+            continue
+
+        pub = m.get("publish") or {}
+        try:
+            pfrom = datetime.datetime.fromisoformat(pub.get("from", ""))
+            if pfrom > now:
+                continue   # framtida / "Kommande:"
+        except (TypeError, ValueError):
+            pass  # ej parsebart datum → visa hellre än gömma
+
+        var = (m.get("message_variants") or [{}])[0]
+        header = var.get("header") or ""
+        h_lower = header.lower()
+        if any(b in h_lower for b in ALERT_HEADER_BLOCKLIST):
+            continue
+
+        hits.append({
+            "level": "STOPP" if imp >= 7 else "INFO",
+            "alias": (var.get("scope_alias") or "").strip(),
+            "header": header.strip(),
+            "_sort": imp + pr.get("influence_level", 0),
+        })
+
+    hits.sort(key=lambda h: h["_sort"], reverse=True)
+    for h in hits:
+        del h["_sort"]
+    return hits[:ALERT_MAX_ROWS]
 
 
 def atomic_write(path, content):
@@ -258,7 +350,8 @@ def _fetch_rows(url, with_type):
 
 
 def main():
-    updated = datetime.datetime.now(TZ).strftime("%H:%M")
+    now = datetime.datetime.now(TZ)
+    updated = now.strftime("%H:%M")
     cache = load_cache()
     new_cache = dict(cache)
     failures = []
@@ -279,14 +372,25 @@ def main():
         failures.append(f"NS ({e})")
         ns_rows = cache.get("ns", [])
 
-    atomic_write(OUT_FILE, render_page(nt_rows, ns_rows, updated))
+    # Störnings-API:t isoleras: om det faller visas avgångar ändå, alert-
+    # sektionen göms (eller last-good visas).
+    try:
+        raw_msgs = fetch_sl(DEVIATIONS_URL)
+        alerts = filter_alerts(raw_msgs, now=now)
+        new_cache["alerts"] = alerts
+    except Exception as e:
+        failures.append(f"DEV ({e})")
+        alerts = cache.get("alerts", [])
+
+    atomic_write(OUT_FILE, render_page(nt_rows, ns_rows, updated, alerts))
     save_cache(new_cache)
 
     if failures:
         print(f"VARNING: SL-API-fel [{'; '.join(failures)}] — "
               f"renderade med last-good där tillgängligt", file=sys.stderr)
         return 1
-    print(f"OK | {updated} | NT: {len(nt_rows)} avg | NS: {len(ns_rows)} avg")
+    print(f"OK | {updated} | NT: {len(nt_rows)} avg | "
+          f"NS: {len(ns_rows)} avg | störningar: {len(alerts)}")
     return 0
 
 

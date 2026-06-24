@@ -47,3 +47,16 @@ scp /tmp/slinfo-prod/update.php \
 
 5 skärmar i spellistor som visar `https://slinfo.brfhimmelsbagen.se/`
 (index.php redirectar till display.html).
+
+## Loopia-PHP rollback saknar deviations (sedan 2026-06-24)
+
+`edge/generate_slinfo.py` på edge-a24-1 har stöd för system-störningar
+(STOPP/INFO-rutor överst, hämtade från SL:s deviations-API, filter
+`importance_level >= 6`). `web/update.php` (Loopia-versionen som är
+*dormant rollback*) har **inte** detta stöd.
+
+Om rollback till Loopia behövs:
+1. Tavlan kommer förlora STOPP-rutorna (avgångstabellerna kvar)
+2. Portning av `filter_alerts` + `alerts_html` + `__ALERTS__` till PHP
+   krävs innan rollback är funktionellt likvärdig
+3. SL API:t som används: `https://deviations.integration.sl.se/v1/messages?future=true&transport_mode=METRO&transport_mode=TRAIN&transport_mode=TRAM&transport_mode=SHIP`
