@@ -1,2 +1,5 @@
 web/display.html
 web/cache.json
+.venv-dev/
+__pycache__/
+render/

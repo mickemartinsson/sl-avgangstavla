@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SL Avgångar</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, Helvetica, sans-serif; background: #f5f7fa; color: #1a2433; }
+    table { width: 100%; border-collapse: collapse; }
+  </style>
+  <script>
+    // DOM-swap istället för navigation: skärmen lämnar aldrig sidan och kan
+    // aldrig fastna på browserns 502-felsida. Detta script lever i <head> och
+    // ersätts aldrig — bara innehållet i #content byts.
+    (function () {
+      var RELOAD_MS = 5 * 60 * 1000;
+      function jitter(min, max) { return min + Math.floor(Math.random() * (max - min)); }
+      function schedule(ms) { setTimeout(tick, ms); }
+      function tick() {
+        fetch('display.html?_=' + Date.now())
+          .then(function (r) {
+            if (!r.ok) { schedule(jitter(30000, 90000)); return; }
+            return r.text().then(function (txt) {
+              try {
+                var doc = new DOMParser().parseFromString(txt, 'text/html');
+                var fresh = doc.getElementById('content');
+                var cur = document.getElementById('content');
+                if (fresh && cur) {
+                  cur.innerHTML = fresh.innerHTML;
+                  schedule(RELOAD_MS + jitter(0, 60000));
+                } else {
+                  schedule(jitter(30000, 90000));
+                }
+              } catch (e) {
+                schedule(jitter(30000, 90000));
+              }
+            });
+          })
+          .catch(function () { schedule(jitter(30000, 90000)); });
+      }
+      schedule(RELOAD_MS + jitter(0, 60000));
+    })();
+  </script>
+</head>
+<body>
+
+<div id="content">
+  <!-- TOPPMENY -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#005AA0;">
+    <tr>
+      <td style="padding:12px 20px;">
+        <table cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="background-color:#ffffff;color:#005AA0;font-family:Arial,Helvetica,sans-serif;font-weight:900;font-size:20px;width:40px;height:40px;text-align:center;vertical-align:middle;">SL</td>
+            <td style="padding-left:14px;">
+              <div style="font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:bold;color:#ffffff;">Avgångar mot centrum</div>
+              <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#cce0f0;margin-top:2px;">Nacka Trafikplats &amp; Nacka Strand</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+      <td style="padding:12px 20px;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#cce0f0;vertical-align:middle;">
+        Uppdaterad 12:34
+      </td>
+    </tr>
+  </table>
+
+  <!-- STÖRNINGAR (göms om tom) -->
+
+  <!-- INNEHÅLL -->
+  <div style="padding:16px;">
+
+    <!-- NACKA TRAFIKPLATS -->
+    <div style="background-color:#ffffff;border:1px solid #dde3ea;margin-bottom:16px;">
+      <div style="background-color:#005AA0;color:#ffffff;font-family:Arial,Helvetica,sans-serif;padding:10px 16px;font-size:15px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;">
+        Nacka Trafikplats
+      </div>
+      <table>
+        <thead>
+          <tr style="background-color:#e6eff7;border-bottom:2px solid #005AA0;">
+            <th style="padding:7px 14px;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.8px;color:#005AA0;text-align:left;" width="90">Tid</th>
+            <th style="padding:7px 14px;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.8px;color:#005AA0;text-align:left;">Destination</th>
+            <th style="padding:7px 14px;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.8px;color:#005AA0;text-align:left;" width="80">Linje</th>
+          </tr>
+        </thead>
+        <tbody>
+<tr style="background-color:#ffffff;"><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:20px;font-weight:bold;color:#005AA0;width:90px;white-space:nowrap;">22:41</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;">Glasbruksgatan</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;font-weight:bold;width:80px;">25M</td></tr>
+<tr style="background-color:#f0f4f8;"><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:20px;font-weight:bold;color:#005AA0;width:90px;white-space:nowrap;">22:54</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;">Glasbruksgatan</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;font-weight:bold;width:80px;">26M</td></tr>
+<tr style="background-color:#ffffff;"><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:20px;font-weight:bold;color:#005AA0;width:90px;white-space:nowrap;">23:09</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;">Glasbruksgatan</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;font-weight:bold;width:80px;">25M</td></tr>
+<tr style="background-color:#f0f4f8;"><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:20px;font-weight:bold;color:#005AA0;width:90px;white-space:nowrap;">23:24</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;">Glasbruksgatan</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;font-weight:bold;width:80px;">26M</td></tr>
+<tr style="background-color:#ffffff;"><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:20px;font-weight:bold;color:#005AA0;width:90px;white-space:nowrap;">23:39</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;">Glasbruksgatan</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;font-weight:bold;width:80px;">25M</td></tr>
+<tr style="background-color:#f0f4f8;"><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:20px;font-weight:bold;color:#005AA0;width:90px;white-space:nowrap;">23:54</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;">Glasbruksgatan</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;font-weight:bold;width:80px;">26M</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- NACKA STRAND -->
+    <div style="background-color:#ffffff;border:1px solid #dde3ea;">
+      <div style="background-color:#005AA0;color:#ffffff;font-family:Arial,Helvetica,sans-serif;padding:10px 16px;font-size:15px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;">
+        Nacka Strand
+      </div>
+      <table>
+        <thead>
+          <tr style="background-color:#e6eff7;border-bottom:2px solid #005AA0;">
+            <th style="padding:7px 14px;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.8px;color:#005AA0;text-align:left;" width="90">Tid</th>
+            <th style="padding:7px 14px;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.8px;color:#005AA0;text-align:left;">Destination</th>
+            <th style="padding:7px 14px;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.8px;color:#005AA0;text-align:left;" width="80">Linje</th>
+            <th style="padding:7px 14px;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.8px;color:#005AA0;text-align:left;" width="60">Typ</th>
+          </tr>
+        </thead>
+        <tbody>
+<tr style="background-color:#ffffff;"><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:20px;font-weight:bold;color:#005AA0;width:90px;white-space:nowrap;">22:32</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;">Slussen</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;font-weight:bold;width:80px;">443</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:14px;color:#666;width:60px;">Buss</td></tr>
+<tr style="background-color:#f0f4f8;"><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:20px;font-weight:bold;color:#005AA0;width:90px;white-space:nowrap;">22:39</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;">Nybroplan</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;font-weight:bold;width:80px;">80</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:14px;color:#666;width:60px;">Båt</td></tr>
+<tr style="background-color:#ffffff;"><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:20px;font-weight:bold;color:#005AA0;width:90px;white-space:nowrap;">23:02</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;">Slussen</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;font-weight:bold;width:80px;">443</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:14px;color:#666;width:60px;">Buss</td></tr>
+<tr style="background-color:#f0f4f8;"><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:20px;font-weight:bold;color:#005AA0;width:90px;white-space:nowrap;">23:07</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;">Nybroplan</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;font-weight:bold;width:80px;">80</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:14px;color:#666;width:60px;">Båt</td></tr>
+<tr style="background-color:#ffffff;"><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:20px;font-weight:bold;color:#005AA0;width:90px;white-space:nowrap;">23:32</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;">Slussen</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:18px;font-weight:bold;width:80px;">443</td><td style="border-bottom:1px solid #dde3ea;padding:10px 14px;font-size:14px;color:#666;width:60px;">Buss</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <div style="padding:8px 16px 14px;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#999;text-align:center;">
+    Data hämtad 12:34 &nbsp;&middot;&nbsp; Sidan laddas om automatiskt var 5:e minut
+  </div>
+</div>
+
+</body>
+</html>
