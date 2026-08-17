@@ -3,3 +3,6 @@ web/cache.json
 .venv-dev/
 __pycache__/
 render/
+
+# Claude Code-worktrees — lokala. OBS: övrig .claude/ är spårad här med avsikt (launch.json/skills)
+.claude/worktrees/
