@@ -30,14 +30,52 @@ Roten fungerar tack vare `index display.html` i `file_server`-blocket
 inget `index`-direktiv och `index.php`-redirecten från Loopia följde inte med
 migrationen.
 
-### Skärmar (Axema C205)
+### Skärmar (Axema C205) — verifierade i accessloggen 2026-08-29
 
-5 skärmar i spellistor. Skärmarnas URL ligger i Axemas spellista, inte i något
-repo, och är inte verifierad härifrån — men **båda vägarna fungerar nu**, så
-det spelar ingen roll om de pekar på roten eller på `/display.html`.
+Skärmarnas URL ligger i Axemas spellista, inte i något repo. Den lästes därför
+**ur Caddys accessloggar** i stället (2 h fönster, 05:06–07:06 UTC):
 
-Historisk not: pekade en skärm på roten var den mörk från juni 2026 till
-2026-08-29.
+| | |
+|---|---|
+| Klient-IP | `84.217.120.115` (BRF:ens publika IP) |
+| Requests | 645, sammanhängande — **längsta lucka 28 s** |
+| URI | `/display.html?v=2` — **645 av 645. Aldrig roten.** |
+| Svar | 525 × `304 Not Modified`, 120 × `200` |
+| User-Agent | `…AppleWebKit/538.1 … reservationterminal Safari/538.1` |
+| Referer | `https://tvatt.brfhimmelsbagen.se/informationterminal/` |
+
+**Tavlorna fungerar och har gjort det hela tiden.** De sitter inbäddade i
+tvättportalens informationsterminal-sida.
+
+Gap-mönstret (par om 5–6 s och 10–11 s, sedan 28 s, ~96 cykler på 2 h) är
+konsekvent med **5 klienter som pollar var ~75:e sekund, förskjutna** — men
+enheterna ligger bakom NAT och kan inte särskiljas per IP, så antalet är
+härlett, inte bevisat.
+
+De många 304:orna betyder att `If-None-Match`/`If-Modified-Since` fungerar:
+skärmarna drar inte ner hela sidan varje gång.
+
+> **Not om `index display.html`:** direktivet sattes 2026-08-29 för att roten
+> gav 404. Loggen visar att skärmarna aldrig efterfrågat roten — det var alltså
+> en latent lucka som stängdes, inte ett avbrott som lagades.
+
+### ⚠️ Loopias cron kör fortfarande — och 404:ar
+
+`93.188.1.201`, User-Agent `Loopia Cronrunner v1.2 libwww-perl/6.83`, träffar
+`/update.php` **var 5:e minut** (mätta intervall 296–304 s). Alla svar `404` —
+`update.php` finns inte på edgen.
+
+Det är Loopia-erans cron som aldrig stängdes av:
+
+```
+*/5 * * * *   curl -s https://slinfo.brfhimmelsbagen.se/update.php > /dev/null
+```
+
+Den har kört mot edgen sedan DNS pekades om i juni 2026 — ~288 anrop/dygn, alla
+förgäves, och den utgör hela 404-populationen i loggen bortsett från manuella
+prober. Ofarligt men skräpigt.
+
+**Åtgärd (Mikael, BRF:ens Loopia-konto, web-UI):** ta bort cron-jobbet.
 
 ## Rollback till Loopia (dormant)
 
