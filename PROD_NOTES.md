@@ -1,62 +1,103 @@
 # Produktionsnoteringar — slinfo.brfhimmelsbagen.se
 
-## Deploy 2026-04-23: 502-fix på produktionens hårdkodade update.php
+> **Produktion är `edge.a24.martinsson.eu` sedan juni 2026.** Loopia är avvecklat
+> som produktionsplattform. `web/`-katalogen finns kvar som dormant rollback —
+> se [Rollback till Loopia](#rollback-till-loopia-dormant).
 
-### Bakgrund
+## Så ser produktionen ut
 
-- Loopia-produktionen kör en **hårdkodad** version av `update.php` (NT+NS URLs
-  i koden), inte den konfigurerbara v2 som finns på `main` (commit 1f01d6a).
-- Den konfigurerbara v2 (`settings.php` + `search.php` + `config.json`) har
-  aldrig deployats på brfhimmelsbagen.
-- Efter ca 1 månads drift återkom 502-problem från Loopia shared hosting.
+| | |
+|---|---|
+| Värd | `edge.a24.martinsson.eu` (`64.112.127.253`) — se [a24-offsite-edge](https://gitea.a24.martinsson.eu/A24/a24-offsite-edge) §5a |
+| Serverad fil | `/var/www/slinfo/display.html`, statiskt via Caddy (`edge/caddy/slinfo.brfhimmelsbagen.se.caddy`) |
+| Generator | `edge/generate_slinfo.py`, körd av `slinfo-generator.timer` (`OnCalendar=*:0/5`, `RandomizedDelaySec=20`) |
+| Publik URL | **`https://slinfo.brfhimmelsbagen.se/display.html`** |
+| Bevakning | `a24-infra/services/slinfo-uptime/slinfo-probe.sh` + edge-monitorns `monitor/probes.toml` — **båda probar `/display.html`** |
 
-### Den här branchen (prod-sync)
+Mätt 2026-08-29 08:44 CEST: `display.html` HTTP 200, 10 907 byte,
+`last-modified` 4 min 43 s gammal. Generatorn ligger i fas med timern.
 
-`prod-sync` speglar det som faktiskt kör i produktion PLUS 502-fixen.
-Använd den här branchen som referens vid framtida ändringar mot produktionen
-tills v2 migreras.
+### ⚠️ Roten svarar 404 — använd alltid `/display.html`
 
-### 502-fix i `<script>`-blocket
+Caddy-vhosten kör `file_server` utan `index`-direktiv, och det finns ingen PHP på
+edgen. Därför gäller:
 
-Två minimala ändringar utan utseende-/funktionspåverkan för tittaren:
+| URL | Svar |
+|---|---|
+| `https://slinfo.brfhimmelsbagen.se/` | **404** |
+| `https://slinfo.brfhimmelsbagen.se/index.php` | **404** |
+| `https://slinfo.brfhimmelsbagen.se/display.html` | **200** |
 
-1. `fetch('display.html', { cache:'no-cache' })` → `fetch('display.html', { method:'HEAD', cache:'no-cache' })`
-   - HEAD drar bara headers, inte hela display.html. Halverar serverlast per reload.
-2. `setTimeout(reload, 10000)` → `setTimeout(reload, retryDelay())` där
-   `retryDelay()` ger 10–30 s slumpad väntetid.
-   - Förhindrar att alla 5 skärmar retryer en 502:ande server i lockstep.
-
-### Deploy-sekvens
-
-```bash
-# SSH: 2r8w99@ssh.loopia.se  (nyckel: ~/.ssh/id_ed25519, fingerprint kZoM…EVuE)
-scp /tmp/slinfo-prod/update.php \
-    2r8w99@ssh.loopia.se:slinfo.brfhimmelsbagen.se/public_html/update.php
-
-# Backup skapas på servern innan skrivning:
-# update.php.bak-YYYYMMDD-HHMMSS
-```
-
-### Cron-jobb på Loopia
-
-```
-*/5 * * * *   curl -s https://slinfo.brfhimmelsbagen.se/update.php > /dev/null
-```
+I Loopia-uppsättningen redirectade `index.php` roten till `display.html`. Den
+vägen finns inte längre.
 
 ### Skärmar (Axema C205)
 
-5 skärmar i spellistor som visar `https://slinfo.brfhimmelsbagen.se/`
-(index.php redirectar till display.html).
+5 skärmar i spellistor. **Skärmarnas URL ligger i Axemas spellista, inte i något
+repo, och är därför inte verifierad härifrån.** Kontrollera att de pekar på
+`/display.html` och inte på roten — roten ger 404 sedan edge-migrationen (juni
+2026). Visar en skärm rätt tavla idag är den redan repointad.
 
-## Loopia-PHP rollback saknar deviations (sedan 2026-06-24)
+Vill man att roten ska fungera igen räcker ett `index display.html` eller
+`try_files {path} /display.html` i vhosten. **Ej gjort** — kräver deploy mot
+edgen.
 
-`edge/generate_slinfo.py` på edge-a24-1 har stöd för system-störningar
-(STOPP/INFO-rutor överst, hämtade från SL:s deviations-API, filter
-`importance_level >= 6`). `web/update.php` (Loopia-versionen som är
-*dormant rollback*) har **inte** detta stöd.
+## Rollback till Loopia (dormant)
 
-Om rollback till Loopia behövs:
-1. Tavlan kommer förlora STOPP-rutorna (avgångstabellerna kvar)
-2. Portning av `filter_alerts` + `alerts_html` + `__ALERTS__` till PHP
-   krävs innan rollback är funktionellt likvärdig
-3. SL API:t som används: `https://deviations.integration.sl.se/v1/messages?future=true&transport_mode=METRO&transport_mode=TRAIN&transport_mode=TRAM&transport_mode=SHIP`
+`web/` bär den hårdkodade `update.php` som körde på Loopia, **inklusive
+502-fixen** (`git show main:web/update.php` = sha `c3c3ed39…`, byte-identisk med
+det som senast låg i produktion där).
+
+Rollback är alltså funktionellt möjlig, med två kända avvikelser:
+
+1. **Trafikstörningar försvinner.** `edge/generate_slinfo.py` visar STOPP/INFO
+   ovanför tavlan (SL:s deviations-API, filter `importance_level >= 6`).
+   `web/update.php` saknar detta. Portning av `filter_alerts` + `alerts_html` +
+   `__ALERTS__` till PHP krävs för likvärdig rollback.
+   API: `https://deviations.integration.sl.se/v1/messages?future=true&transport_mode=METRO&transport_mode=TRAIN&transport_mode=TRAM&transport_mode=SHIP`
+2. **Loopia flappade 502** i shared hosting — grundskälet till migrationen.
+
+### Historisk deploy-sekvens (Loopia)
+
+```bash
+# SSH: 2r8w99@ssh.loopia.se
+scp web/update.php 2r8w99@ssh.loopia.se:slinfo.brfhimmelsbagen.se/public_html/update.php
+# Backup skapas på servern: update.php.bak-YYYYMMDD-HHMMSS
+```
+
+Cron på Loopia: `*/5 * * * * curl -s https://slinfo.brfhimmelsbagen.se/update.php > /dev/null`
+
+502-fixen i `<script>`-blocket, för referens:
+`fetch(..., {method:'HEAD'})` i stället för full GET, och `setTimeout(reload, retryDelay())`
+med 10–30 s slumpad väntetid så att alla 5 skärmar inte retryar i lockstep.
+
+## Avvecklat
+
+### Branchen `prod-sync` — pensionerad 2026-08-29
+
+`prod-sync` speglade Loopia-produktionen och användes som referens vid ändringar
+mot den. När produktionen flyttade till edgen i juni 2026 upphörde det den
+speglade att existera, och grenen slutade uppdateras.
+
+Vid pensioneringen låg den 17 commits bakom `main` — de 17 var edge-migrationen
+själv. Grenen bar **noll unikt innehåll**: alla sex `web/`-filer byte-identiska
+med `main`, och dess tipp `6ae9c90` är förfader till `main`.
+
+Bevarad som taggen `pensionerad/prod-sync`. Återskapa vid behov med
+`git checkout -b prod-sync pensionerad/prod-sync`.
+
+### `slinfo-render` (PNG till Loopia) — POC byggd, aldrig driftsatt
+
+Ett tidigare försök att komma runt Loopias 502:or var att rendera tavlan som
+960×1080 PNG i en LXC och pusha till Loopia. Ansatsen ersattes av
+edge-migrationen.
+
+**Koden finns kvar** som taggen `poc/slinfo-render` (3 commits, 2026-05-02,
+pushad till origin) med `render/render.py`, `deploy.sh`, systemd-units och
+mall. Hämta med `git checkout -b <namn> poc/slinfo-render`.
+
+Det som aldrig blev av var *driftsättningen*: branchen `pdf-pipeline` skapades
+aldrig, LXC:n på pve12 skapades aldrig, och `tavlan.png` har aldrig serverats
+(404 än idag). Infra-bootstrappen `a24-infra/services/slinfo-render/` — vars
+setup-script klonade just den obefintliga `pdf-pipeline`-branchen — togs bort
+2026-08-29.

@@ -4,6 +4,17 @@ Konfigurerbar avgångstavla som visar SL-avgångar i realtid. Designad för info
 
 Via en lösenordsskyddad inställningssida kan du välja vilka hållplatser (2-3 st), riktning och trafikslag som ska visas — utan att behöva ändra i koden.
 
+## Två uppsättningar i repot
+
+| Katalog | Vad | Status |
+|---|---|---|
+| `edge/` | Python-generator + systemd-timer + Caddy-vhost. Statisk `display.html`, ingen PHP. | **Produktion** för `slinfo.brfhimmelsbagen.se` sedan juni 2026 (`edge.a24.martinsson.eu`) |
+| `web/` | PHP-varianten nedan (`update.php` + `settings.php`), för webbhotell. | Dormant rollback — se [PROD_NOTES.md](PROD_NOTES.md) |
+
+Driftsdetaljer, rollback-läge och skärmkonfiguration: **[PROD_NOTES.md](PROD_NOTES.md)**.
+
+Resten av det här dokumentet beskriver **PHP-varianten** (`web/`).
+
 ## Krav
 
 Du behöver ett **webbhotell med PHP-stöd** (PHP 7.4+) och möjlighet att skapa **cron-jobb**, t.ex:
