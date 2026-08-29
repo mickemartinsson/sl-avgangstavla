@@ -1,6 +1,10 @@
 slinfo.brfhimmelsbagen.se {
 	root * /var/www/slinfo
-	file_server
+	# index: skärmarna (Axema C205) pekar historiskt på roten, som på Loopia
+	# redirectades av index.php. På edgen finns ingen PHP — utan detta ger / 404.
+	file_server {
+		index display.html
+	}
 	encode gzip
 	header Cache-Control "no-cache"
 	log {

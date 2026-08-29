@@ -17,30 +17,27 @@
 Mätt 2026-08-29 08:44 CEST: `display.html` HTTP 200, 10 907 byte,
 `last-modified` 4 min 43 s gammal. Generatorn ligger i fas med timern.
 
-### ⚠️ Roten svarar 404 — använd alltid `/display.html`
-
-Caddy-vhosten kör `file_server` utan `index`-direktiv, och det finns ingen PHP på
-edgen. Därför gäller:
+### URL:er
 
 | URL | Svar |
 |---|---|
-| `https://slinfo.brfhimmelsbagen.se/` | **404** |
-| `https://slinfo.brfhimmelsbagen.se/index.php` | **404** |
+| `https://slinfo.brfhimmelsbagen.se/` | **200** — serverar `display.html` |
 | `https://slinfo.brfhimmelsbagen.se/display.html` | **200** |
+| `https://slinfo.brfhimmelsbagen.se/index.php` | 404 — ingen PHP på edgen |
 
-I Loopia-uppsättningen redirectade `index.php` roten till `display.html`. Den
-vägen finns inte längre.
+Roten fungerar tack vare `index display.html` i `file_server`-blocket
+(satt 2026-08-29). **Mellan juni och 2026-08-29 gav roten 404** — vhosten hade
+inget `index`-direktiv och `index.php`-redirecten från Loopia följde inte med
+migrationen.
 
 ### Skärmar (Axema C205)
 
-5 skärmar i spellistor. **Skärmarnas URL ligger i Axemas spellista, inte i något
-repo, och är därför inte verifierad härifrån.** Kontrollera att de pekar på
-`/display.html` och inte på roten — roten ger 404 sedan edge-migrationen (juni
-2026). Visar en skärm rätt tavla idag är den redan repointad.
+5 skärmar i spellistor. Skärmarnas URL ligger i Axemas spellista, inte i något
+repo, och är inte verifierad härifrån — men **båda vägarna fungerar nu**, så
+det spelar ingen roll om de pekar på roten eller på `/display.html`.
 
-Vill man att roten ska fungera igen räcker ett `index display.html` eller
-`try_files {path} /display.html` i vhosten. **Ej gjort** — kräver deploy mot
-edgen.
+Historisk not: pekade en skärm på roten var den mörk från juni 2026 till
+2026-08-29.
 
 ## Rollback till Loopia (dormant)
 
