@@ -59,23 +59,26 @@ skärmarna drar inte ner hela sidan varje gång.
 > gav 404. Loggen visar att skärmarna aldrig efterfrågat roten — det var alltså
 > en latent lucka som stängdes, inte ett avbrott som lagades.
 
-### ⚠️ Loopias cron kör fortfarande — och 404:ar
+### Loopias cron — avstängd 2026-08-29 ✅
 
-`93.188.1.201`, User-Agent `Loopia Cronrunner v1.2 libwww-perl/6.83`, träffar
-`/update.php` **var 5:e minut** (mätta intervall 296–304 s). Alla svar `404` —
-`update.php` finns inte på edgen.
-
-Det är Loopia-erans cron som aldrig stängdes av:
+Loopia-erans cron låg kvar och körde mot edgen efter DNS-omläggningen i juni
+2026:
 
 ```
 */5 * * * *   curl -s https://slinfo.brfhimmelsbagen.se/update.php > /dev/null
 ```
 
-Den har kört mot edgen sedan DNS pekades om i juni 2026 — ~288 anrop/dygn, alla
-förgäves, och den utgör hela 404-populationen i loggen bortsett från manuella
-prober. Ofarligt men skräpigt.
+`update.php` finns inte på edgen, så varje anrop gav `404` — ~288 förgäves
+anrop per dygn i drygt två månader. Mikael tog bort jobbet i BRF:ens
+Loopia-konto 2026-08-29.
 
-**Åtgärd (Mikael, BRF:ens Loopia-konto, web-UI):** ta bort cron-jobbet.
+**Verifierat i accessloggen:** sista träffen från `93.188.1.201`
+(UA `Loopia Cronrunner v1.2 libwww-perl/6.83`) var `07:05:01 UTC`. Dessförinnan
+gick den på sekunden var 5:e minut. Därefter **tre uteblivna cykler i rad**
+(07:10, 07:15, 07:20) och noll nya `404` överhuvudtaget.
+
+Kvarvarande 404 i loggen kommer från internetscannrar och manuella prober —
+det är brus, inte ett flöde.
 
 ## Rollback till Loopia (dormant)
 
@@ -101,6 +104,11 @@ scp web/update.php 2r8w99@ssh.loopia.se:slinfo.brfhimmelsbagen.se/public_html/up
 ```
 
 Cron på Loopia: `*/5 * * * * curl -s https://slinfo.brfhimmelsbagen.se/update.php > /dev/null`
+
+> ⚠️ **Vid rollback måste cron-jobbet återskapas.** Det togs bort 2026-08-29
+> (se ovan). Utan det uppdateras aldrig `display.html` på Loopia — tavlan
+> fryser på sitt sista innehåll i stället för att gå ned, vilket är svårare
+> att upptäcka.
 
 502-fixen i `<script>`-blocket, för referens:
 `fetch(..., {method:'HEAD'})` i stället för full GET, och `setTimeout(reload, retryDelay())`
